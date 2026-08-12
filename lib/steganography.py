@@ -1,9 +1,9 @@
 
-from app.mec_math import *
-from app.llm_sampler import *
+from lib.mec_math import *
+from lib.llm_sampler import *
 
 class Steganographer:
-    def __init__(self, model_name, topk=40, block_size=10):
+    def __init__(self, model_name, topk, block_size):
         self.llm_sampler = Sampler(model_name, topk) # autoregressive conditional distribution
 
         self.topk = topk
@@ -56,12 +56,14 @@ class Steganographer:
             mu_istar_prime = normalize(M[:, S_j_ix])
             # update
             mus[istar] = mu_istar_prime
+            delta_entropy = mus_entropy[istar] - entropy(mu_istar_prime)
             mus_entropy[istar] = entropy(mu_istar_prime)
 
             j += 1
+            yield self.llm_sampler.tokenizer.decode([S_j]), istar, delta_entropy
 
-        # print(step)
-        return S, self.llm_sampler.tokenizer.decode(S)
+            # print(step)
+        # return S, self.llm_sampler.tokenizer.decode(S)
 
 
     def decode(self, S, context, n_blocks):
@@ -69,6 +71,16 @@ class Steganographer:
             S: list of token ids (excludes context)
             context: string
         '''
+
+        def sample_from_mu_prod():
+            out_barr_list = []
+            block_ids = []
+            for mu in mus:
+                idcand = np.random.choice(np.arange(1 << self.block_size), p=mu)
+                block_ids.append(idcand)
+                barr = int_to_barr(idcand, width=self.block_size)
+                out_barr_list.append(barr)
+            return out_barr_list
 
         mu_num = 1 << self.block_size
         mus = [np.ones(mu_num, ) / mu_num for _ in range(n_blocks)]  # init uniforms
@@ -83,7 +95,7 @@ class Steganographer:
             # coupling
             M = mec(mu_istar, C_probs)  # (mu_dom, topk)
 
-            s_j_ix = np.where(C_idxs == S[j])[0].item() # find column index matching token value
+            s_j_ix = np.where(C_idxs == S[j])[0].item()  # find column index matching token value
 
             # update context, generate new conditional distribution
             # context += self.tokenizer.decode([S[step]])
@@ -97,14 +109,8 @@ class Steganographer:
             mus_entropy[istar] = entropy(mu_istar_prime)
 
             j += 1
+            yield sample_from_mu_prod()
 
-        # select from distribution product
-        out_barr = bitarray('')
-        block_ids = []
-        for mu in mus:
-            idcand = np.random.choice(np.arange(1 << self.block_size), p=mu)
-            block_ids.append(idcand)
-            barr = int_to_barr(idcand, width=self.block_size)
-            out_barr += barr
-        return out_barr.tobytes()
+
+
 

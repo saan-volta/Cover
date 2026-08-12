@@ -1,4 +1,5 @@
 import numpy as np
+import random
 from bitarray import bitarray
 
 def softmax(x, axis=-1):
@@ -32,6 +33,16 @@ def block_partition(data, block_size):
         block = bitdata[i:i + block_size]
         blocks.append(block)
     return blocks
+
+def pad_with_rand(ct: bytes, block_size: int, maxlen: int):
+    part = block_partition(ct, block_size)
+    assert len(part) <= maxlen
+
+    for _ in range(maxlen - len(part)):
+        part.append(int_to_barr(random.getrandbits(block_size), width=block_size))
+    return part
+
+
 
 
 def barr_to_int(barr):
@@ -94,3 +105,9 @@ def mec(p: np.array, q: np.array):
         J[a_i[0], a_i[1]] = r
         r = M.max(axis=1).min()
     return J[:d1, :d2]  # eliminate padding
+
+def bytes_xor(B1: bytes, B2: bytes):
+    assert len(B1)==len(B2)
+    return bytes([b1^b2 for b1,b2 in zip(B1, B2)])
+
+
