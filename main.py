@@ -22,6 +22,8 @@ def main():
     BLOCK_LENGTH = 8 # bits
     KEY_LENGTH = BLOCK_LENGTH # for simplicity
 
+    # Note: 8 = KEY_LENGTH = BLOCK_LENGTH
+
     MODEL_NAME = "HuggingFaceTB/SmolLM2-135M"
     TOPK = 40
 

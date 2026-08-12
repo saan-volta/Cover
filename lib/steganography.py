@@ -1,6 +1,8 @@
 
-from lib.mec_math import *
-from lib.llm_sampler import *
+from .mec_math import *
+from .llm_sampler import *
+
+from collections.abc import Generator
 
 class Steganographer:
     def __init__(self, model_name, topk, block_size):
@@ -10,16 +12,15 @@ class Steganographer:
         self.block_size = block_size
 
 
-    def encode(self, ct_blocks: list[bitarray], context, max_iters=1000):
+    def encode(self, ct_blocks: list[bitarray], context: str, max_iters=1000) -> Generator[str, None, None]:
         '''
-
         Args:
             ct_blocks: list of bitarrays each of width BLOCK_SIZE padded appropriately.
             context: covertext string
-            max_iters: self explanatory
+            max_iters: hard cap on number of steps. May fail to embed full information of the input
 
         Returns:
-
+            Generator of strings (tokens)
         '''
 
         # ciphertext_bits_arr = bitarray(ciphertext.encode())
@@ -66,11 +67,16 @@ class Steganographer:
         # return S, self.llm_sampler.tokenizer.decode(S)
 
 
-    def decode(self, S, context, n_blocks):
-        '''
-            S: list of token ids (excludes context)
-            context: string
-        '''
+    def decode(self, S: list[int], context, n_blocks) -> Generator[list[bitarray], None, None]:
+        """
+        Args:
+            S:  list of tokens encoded to indices by the LLM's tokenizer. Does not include context.
+            context: must be same as encode's
+            n_blocks: length in blocks of the encoded message (must be same as encode's)
+
+        Returns:
+            Generator yielding list of bitarrays of the predicted ciphertext at each step.
+        """
 
         def sample_from_mu_prod():
             out_barr_list = []
