@@ -21,11 +21,12 @@ def entropy(p, axis=None, base=2):
     return -np.sum(p * log_p, axis=axis)
 
 
-def block_partition(data, block_size):
+def block_partition(data: bytes, block_size: int):
     bitdata = bitarray(data)
     # pad
     r = len(bitdata) % block_size
-    bitdata += bitarray('0' * (block_size - r))
+    if r != 0:
+        bitdata += bitarray('0' * (block_size - r))  # pad with 0 to full blocks
     assert len(bitdata) % block_size == 0
 
     blocks = []
@@ -106,8 +107,37 @@ def mec(p: np.array, q: np.array):
         r = M.max(axis=1).min()
     return J[:d1, :d2]  # eliminate padding
 
+
+
 def bytes_xor(B1: bytes, B2: bytes):
     assert len(B1)==len(B2)
     return bytes([b1^b2 for b1,b2 in zip(B1, B2)])
+
+
+def cycle_k(k, n, b: int) -> bytes:
+    """Cycles the b-bit integer k until it forms a bytes object of length n.
+
+    Args:
+        n: The exact number of target bytes (length of output).
+        k: The integer whose bit representation is cycled.
+        b: The bit length of k. (may include leading zeroes)
+
+    Returns:
+        A bytes object of length n containing the cycled bit pattern.
+    """
+    if n * 8 < b:
+        raise ValueError("n * 8 must be greater than or equal to b.")
+    if b <= 0:
+        raise ValueError("Bit length b must be greater than 0.")
+
+    # 1. Format k as a binary string padded with leading zeros to length b
+    k_bits = f"{k & ((1 << b) - 1):0{b}b}"
+    # 2. Total bits needed for n bytes
+    total_bits = n * 8
+    # 3. Repeat and truncate the string to match the exact bit length
+    repeated_bits = (k_bits * (total_bits // b + 1))[:total_bits]
+    # 4. Convert bit string into a list of 8-bit integers and cast to bytes
+    byte_list = [int(repeated_bits[i: i + 8], 2) for i in range(0, total_bits, 8)]
+    return bytes(byte_list)
 
 
