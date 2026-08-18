@@ -1,6 +1,6 @@
 
 from lib.steganography import *
-from lib.mec_math import pad_with_rand
+from lib.mec_math import pad_with_rand, cycle_k
 
 import random
 from functools import reduce
@@ -20,38 +20,41 @@ def main():
     # set up
     N_BLOCKS = 64
     BLOCK_LENGTH = 8 # bits
-    KEY_LENGTH = BLOCK_LENGTH # for simplicity
+    KEY_LENGTH = 11
 
-    # Note: 8 = KEY_LENGTH = BLOCK_LENGTH
+    assert N_BLOCKS*BLOCK_LENGTH % 8 == 0 # full number of bytes
 
     MODEL_NAME = "HuggingFaceTB/SmolLM2-135M"
-    TOPK = 40
+    TOPK = 100
 
     print(f'\n\n{"-" * 40}\tINITIALIZING\t{"-" * 40} \n\n')
 
     steg = Steganographer(MODEL_NAME, TOPK, BLOCK_LENGTH)
 
-    message = 'Hello world. This is an example encoding procedure.'.encode() # assume whole number of bytes
+    # message = input(f'Enter message (max {N_BLOCKS*BLOCK_LENGTH//8} bytes:\t')
+    message = 'We will meet tomorrow at sunrise at the old rail tracks'
+    message = message.encode() # assume whole number of bytes
     assert 8*len(message) <= BLOCK_LENGTH*N_BLOCKS
 
-    context = 'The weather' # ...
+    # context = input(f'Enter context (use standard english tokens):\t')
+    context = 'Perhaps the weather will hold'
 
-    key = int2ba( random.randint(0, (1<<KEY_LENGTH) - 1), KEY_LENGTH)
+    key = random.getrandbits(KEY_LENGTH)
+    cycled_key = cycle_k(key, len(message), KEY_LENGTH)
 
-    print(f'Message:\t{message}\nContext:\t{context}\nKey:\t{ba2int(key)}\n')
+    print(f'Message:\t{message}\nContext:\t{context}\nKey:\t{key}\n')
 
-    message_partition: list[bitarray] = pad_with_rand(message, BLOCK_LENGTH, N_BLOCKS)
-    # print(len(key), len(message_partition[0]))
-    cipher_partition: list[bitarray] = [mp ^ key for mp in message_partition]
+    ciphertext = bytes_xor(message, cycled_key)
+    cipher_partition: list[bitarray] = pad_with_rand(ciphertext, BLOCK_LENGTH, N_BLOCKS)
 
     print(f'\n\n{"-"*40}\tENCODING\t{"-"*40} \n\n')
 
     encodings = steg.encode(cipher_partition, context) # generator
     rtext = Text()
     with Live(rtext, refresh_per_second=10) as live:
-        for token, _1, _2 in encodings:
+        for token, _idx, _deltaH, d_kl in encodings:
             rtext.append(token)
-            live.update(Text(context)+rtext)
+            live.update(Text(f"KL div: \t{d_kl:e}\n\n") + Text(context)+rtext)
 
     text = rtext.plain
 
@@ -63,11 +66,10 @@ def main():
         N_BLOCKS
     )
 
+    cycled_key_full_length = cycle_k(key, BLOCK_LENGTH*N_BLOCKS//8, KEY_LENGTH)
     with Live(refresh_per_second=10) as live:
         for pred_bitarr_list in decodings:
-            out = b''.join([
-                (barr ^ key) for barr in pred_bitarr_list
-            ]).decode('latin-1')
+            out = bytes_xor( b''.join(pred_bitarr_list) , cycled_key_full_length).decode('latin-1')
             live.update(Text(out))
 
 

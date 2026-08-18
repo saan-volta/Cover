@@ -12,7 +12,7 @@ class Steganographer:
         self.block_size = block_size
 
 
-    def encode(self, ct_blocks: list[bitarray], context: str, max_iters=1000) -> Generator[str, None, None]:
+    def encode(self, ct_blocks: list[bitarray], context: str, max_iters=1000) -> Generator[tuple[str, int, float, float], None, None]:
         '''
         Args:
             ct_blocks: list of bitarrays each of width BLOCK_SIZE padded appropriately.
@@ -36,6 +36,8 @@ class Steganographer:
         C_probs = normalize(C_probs)
         S = []
 
+        D_kl = 0.0 # KL div
+
         j = 0
         while mus_entropy.max() > 0 and j < max_iters:
 
@@ -48,6 +50,8 @@ class Steganographer:
             S_j_ix = np.random.choice(np.arange(0, self.topk), p=d_token)  # S_j_ix is index in [0, topk]
             S_j = C_idxs[S_j_ix]  # S_j is token id in [0, VOCAB_SIZE]
             S.append(S_j)
+
+            D_kl += np.log2(M.sum(axis=0)[S_j_ix] / C_probs[S_j_ix])
             # update context, generate new AC distribution
             # context += self.tokenizer.decode([S_j])
             C_probs, C_idxs = self.llm_sampler.step(S_j)
@@ -61,7 +65,7 @@ class Steganographer:
             mus_entropy[istar] = entropy(mu_istar_prime)
 
             j += 1
-            yield self.llm_sampler.tokenizer.decode([S_j]), istar, delta_entropy
+            yield self.llm_sampler.tokenizer.decode([S_j]), istar, delta_entropy, D_kl/j
 
             # print(step)
         # return S, self.llm_sampler.tokenizer.decode(S)
